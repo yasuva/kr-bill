@@ -19,9 +19,29 @@ class FirebaseService:
 
     def _initialize(self):
         try:
+            # Try to discover the auto-provisioned applet configuration
+            db_id = None
+            project_id = None
+            applet_config_path = os.path.join(os.getcwd(), "firebase-applet-config.json")
+            if os.path.exists(applet_config_path):
+                try:
+                    with open(applet_config_path, "r") as f:
+                        applet_config = json.load(f)
+                        db_id = applet_config.get("firestoreDatabaseId")
+                        project_id = applet_config.get("projectId")
+                        logger.info(f"Discovered local applet config! Project: {project_id}, Database: {db_id}")
+                except Exception as config_ex:
+                    logger.error(f"Failed parsing local firebase-applet-config.json: {config_ex}")
+
             # Check if already initialized by another route/thread
             if firebase_admin._apps:
-                self.db = firestore.client()
+                try:
+                    if db_id:
+                        self.db = firestore.client(database=db_id)
+                    else:
+                        self.db = firestore.client()
+                except Exception:
+                    self.db = firestore.client()
                 return
 
             cred = None
@@ -42,11 +62,37 @@ class FirebaseService:
 
             # Fallback Pattern: Initialize using Default Credentials or run in Sandbox Mock Mode
             if not cred:
-                logger.warning("Firebase credentials not configured. Launching Firebase service in Draft Mock Mode.")
-                self.db = MockFirestoreClient()
+                try:
+                    # In Google Cloud environments (e.g. Cloud Run, Render), Application Default Credentials work natively
+                    options = {}
+                    if project_id:
+                        options["projectId"] = project_id
+                    
+                    firebase_admin.initialize_app(options=options)
+                    if db_id:
+                        try:
+                            self.db = firestore.client(database=db_id)
+                        except Exception:
+                            # If py-firebase-admin version doesn't support database kwargs, fallback to normal client
+                            self.db = firestore.client()
+                    else:
+                        self.db = firestore.client()
+                    logger.info("Firebase Firestore client initialized with Application Default Credentials successfully!")
+                except Exception as adc_ex:
+                    logger.warning(f"Default credentials not available ({adc_ex}). Launching Firebase service in Draft Mock Mode.")
+                    self.db = MockFirestoreClient()
             else:
-                app = firebase_admin.initialize_app(cred)
-                self.db = firestore.client()
+                options = {}
+                if project_id:
+                    options["projectId"] = project_id
+                firebase_admin.initialize_app(cred, options=options)
+                if db_id:
+                    try:
+                        self.db = firestore.client(database=db_id)
+                    except Exception:
+                        self.db = firestore.client()
+                else:
+                    self.db = firestore.client()
                 logger.info("Firebase Firestore client initialized successfully!")
 
         except Exception as e:
