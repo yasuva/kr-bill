@@ -17,13 +17,9 @@ export default function ThermalReceipt({ bill, onClose, onToast }: ThermalReceip
   };
 
   const handleDownloadPDF = () => {
-    if (bill.pdf_url && bill.pdf_url !== "#") {
-      window.open(bill.pdf_url, "_blank");
-      onToast("Opening high-definition PDF standard invoice...", "success");
-    } else {
-      // Offline mock fallback
-      onToast("PDF server is offline. Thermal printing is available.", "error");
-    }
+    const pdfUrl = (bill.pdf_url && bill.pdf_url !== "#") ? bill.pdf_url : `/api/bill/${bill.bill_no}/pdf`;
+    window.open(pdfUrl, "_blank");
+    onToast("Opening PDF invoice...", "success");
   };
 
   return (
