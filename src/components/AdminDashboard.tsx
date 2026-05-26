@@ -311,17 +311,15 @@ export default function AdminDashboard({ onReprint, onToast }: AdminDashboardPro
                         </button>
 
                         {/* Open ReportLab PDF URL out */}
-                        {b.pdf_url && b.pdf_url !== "#" && (
-                          <a
-                            href={b.pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
-                            title="Invoice PDF"
-                          >
-                            <FileText size={13} />
-                          </a>
-                        )}
+                        <a
+                          href={b.pdf_url && b.pdf_url !== "#" ? b.pdf_url : `/api/bill/${b.bill_no}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                          title="Invoice PDF"
+                        >
+                          <FileText size={13} />
+                        </a>
 
                         {/* Delete profile */}
                         <button
