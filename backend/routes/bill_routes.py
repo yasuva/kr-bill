@@ -1,10 +1,10 @@
 import os
+import io
 import uuid
 import datetime
 from flask import Blueprint, request, jsonify, send_file
 from backend.routes.auth_routes import token_required
 from backend.services.firebase_service import firebase_service
-from backend.services.cloudinary_service import cloudinary_service
 from backend.pdf.generator import generate_invoice_pdf
 
 bill_bp = Blueprint("bill", __name__)
@@ -66,33 +66,12 @@ def create_bill():
             "total": tot
         })
 
-    # Save PDF representation temporarily in OS temporary directory
-    temp_pdf_name = f"invoice_{bill_no}.pdf"
-    temp_pdf_path = os.path.join("/tmp" if os.name != "nt" else "C:\\temp", temp_pdf_name)
-    
-    try:
-        # Build ReportLab PDF on local ephemeral path
-        generate_invoice_pdf(bill_payload, temp_pdf_path)
-        
-        # Upload generated invoice PDF to Cloudinary hosting
-        cloudinary_url = cloudinary_service.upload_pdf(temp_pdf_path, bill_no)
-        bill_payload["pdf_url"] = cloudinary_url
-        
-    except Exception as pdf_ex:
-        # Gracefully log issues but don't hold back the transaction!
-        bill_payload["pdf_url"] = f"/api/static/pdfs/{bill_no}.pdf"
-        print(f"Failed to generate/upload ReportLab PDF invoice: {pdf_ex}")
+    # Set local dynamic endpoint URL for PDF retrieval on demand
+    bill_payload["pdf_url"] = f"/api/bill/{bill_no}/pdf"
 
     try:
         # Set structured record in Firebase Firestore database
         firebase_service.db.collection("bills").document(bill_no).set(bill_payload)
-        
-        # Cleanup temporary files (if they exist)
-        if os.path.exists(temp_pdf_path):
-            try:
-                os.remove(temp_pdf_path)
-            except:
-                pass
                 
         return jsonify({
             "success": True,
@@ -179,9 +158,10 @@ def delete_bill(id):
 @bill_bp.route("/api/bill/<bill_no>/pdf", methods=["GET"])
 def get_bill_pdf_url(bill_no):
     """
-    GET /api/bill/<bill_no>/pdf: Checks if a secure PDF has been generated/uploaded for a bill,
-    otherwise dynamically builds the invoice using ReportLab, transfers it to Cloudinary, 
-    persists the resulting address on the document, and returns it.
+    GET /api/bill/<bill_no>/pdf: Checks Firebase for the bill data,
+    renders the professional invoice as a ReportLab PDF, and returns
+    the binary PDF file directly to the browser (for viewing, printing, or downloading)
+    without using any third-party clouds or CDNs.
     """
     try:
         # 1. Retrieve the bill document from Firebase Firestore
@@ -189,24 +169,11 @@ def get_bill_pdf_url(bill_no):
         doc_snap = doc_ref.get()
         
         if not doc_snap.exists:
-            return jsonify({
-                "success": False,
-                "message": f"Bill document with number '{bill_no}' not found in database."
-            }), 404
+            return "<h1>Bill not found in database.</h1>", 404
             
         bill_data = doc_snap.to_dict() if hasattr(doc_snap, "to_dict") else getattr(doc_snap, "_data", {})
         
-        # 2. Check if a valid, secure external PDF already exists on the document
-        existing_url = bill_data.get("pdf_url")
-        if existing_url and existing_url != "#" and existing_url.startswith("http"):
-            return jsonify({
-                "success": True,
-                "bill_no": bill_no,
-                "pdf_url": existing_url,
-                "message": "Existing PDF URL retrieved successfully."
-            }), 200
-            
-        # 3. Dynamic PDF creation path
+        # 2. Dynamic PDF creation path
         temp_pdf_name = f"invoice_{bill_no}.pdf"
         temp_pdf_path = os.path.join("/tmp" if os.name != "nt" else "C:\\temp", temp_pdf_name)
         
@@ -216,41 +183,28 @@ def get_bill_pdf_url(bill_no):
         try:
             generate_invoice_pdf(bill_data, temp_pdf_path)
         except Exception as pdf_ex:
-            return jsonify({
-                "success": False,
-                "message": f"Failed compiling ReportLab PDF layout structure: {str(pdf_ex)}"
-            }), 500
+            return f"<h1>Failed compiling ReportLab PDF: {str(pdf_ex)}</h1>", 500
 
-        # 4. Upload raw file payload to Cloudinary
-        try:
-            cloudinary_url = cloudinary_service.upload_pdf(temp_pdf_path, bill_no)
-        except Exception as cloud_ex:
-            cloudinary_url = f"/api/static/pdfs/{bill_no}.pdf"
-            print(f"Cloudinary upload crashed: {cloud_ex}")
-
-        # 5. Clean up the ephemeral physical PDF file
-        if os.path.exists(temp_pdf_path):
-            try:
-                os.remove(temp_pdf_path)
-            except Exception as rm_ex:
-                print(f"Warning: could not sweep temporary PDF draft: {rm_ex}")
-
-        # 6. Securely update document state in Firestore with the newly resolved URL
-        try:
-            doc_ref.update({"pdf_url": cloudinary_url})
-        except Exception as db_up_ex:
-            print(f"Warning: unable to update Firestore document with PDF URL: {db_up_ex}")
+        # 3. Read PDF file into memory buffer and remove file from disk
+        if not os.path.exists(temp_pdf_path):
+            return "<h1>Failed to save generated PDF on server.</h1>", 500
             
-        return jsonify({
-            "success": True,
-            "bill_no": bill_no,
-            "pdf_url": cloudinary_url,
-            "message": "PDF invoice generated and uploaded successfully."
-        }), 200
+        with open(temp_pdf_path, 'rb') as f:
+            pdf_data = f.read()
+            
+        try:
+            os.remove(temp_pdf_path)
+        except Exception as rm_ex:
+            print(f"Warning: could not sweep temporary PDF draft: {rm_ex}")
+            
+        # 4. Stream PDF file directly from memory to allow viewing and PDF printing in browser
+        return send_file(
+            io.BytesIO(pdf_data),
+            mimetype="application/pdf",
+            as_attachment=False,
+            download_name=f"invoice_{bill_no}.pdf"
+        )
 
     except Exception as general_ex:
-        return jsonify({
-            "success": False,
-            "message": f"An unexpected error occurred during PDF generation: {str(general_ex)}"
-        }), 500
+        return f"<h1>Internal Server Error: {str(general_ex)}</h1>", 500
 
