@@ -174,3 +174,83 @@ def delete_bill(id):
         return jsonify({"success": True, "message": "Transaction bill profile deleted successfully"}), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@bill_bp.route("/api/bill/<bill_no>/pdf", methods=["GET"])
+def get_bill_pdf_url(bill_no):
+    """
+    GET /api/bill/<bill_no>/pdf: Checks if a secure PDF has been generated/uploaded for a bill,
+    otherwise dynamically builds the invoice using ReportLab, transfers it to Cloudinary, 
+    persists the resulting address on the document, and returns it.
+    """
+    try:
+        # 1. Retrieve the bill document from Firebase Firestore
+        doc_ref = firebase_service.db.collection("bills").document(bill_no)
+        doc_snap = doc_ref.get()
+        
+        if not doc_snap.exists:
+            return jsonify({
+                "success": False,
+                "message": f"Bill document with number '{bill_no}' not found in database."
+            }), 404
+            
+        bill_data = doc_snap.to_dict() if hasattr(doc_snap, "to_dict") else getattr(doc_snap, "_data", {})
+        
+        # 2. Check if a valid, secure external PDF already exists on the document
+        existing_url = bill_data.get("pdf_url")
+        if existing_url and existing_url != "#" and existing_url.startswith("http"):
+            return jsonify({
+                "success": True,
+                "bill_no": bill_no,
+                "pdf_url": existing_url,
+                "message": "Existing PDF URL retrieved successfully."
+            }), 200
+            
+        # 3. Dynamic PDF creation path
+        temp_pdf_name = f"invoice_{bill_no}.pdf"
+        temp_pdf_path = os.path.join("/tmp" if os.name != "nt" else "C:\\temp", temp_pdf_name)
+        
+        # Ensure temporary directory exists
+        os.makedirs(os.path.dirname(temp_pdf_path), exist_ok=True)
+        
+        try:
+            generate_invoice_pdf(bill_data, temp_pdf_path)
+        except Exception as pdf_ex:
+            return jsonify({
+                "success": False,
+                "message": f"Failed compiling ReportLab PDF layout structure: {str(pdf_ex)}"
+            }), 500
+
+        # 4. Upload raw file payload to Cloudinary
+        try:
+            cloudinary_url = cloudinary_service.upload_pdf(temp_pdf_path, bill_no)
+        except Exception as cloud_ex:
+            cloudinary_url = f"/api/static/pdfs/{bill_no}.pdf"
+            print(f"Cloudinary upload crashed: {cloud_ex}")
+
+        # 5. Clean up the ephemeral physical PDF file
+        if os.path.exists(temp_pdf_path):
+            try:
+                os.remove(temp_pdf_path)
+            except Exception as rm_ex:
+                print(f"Warning: could not sweep temporary PDF draft: {rm_ex}")
+
+        # 6. Securely update document state in Firestore with the newly resolved URL
+        try:
+            doc_ref.update({"pdf_url": cloudinary_url})
+        except Exception as db_up_ex:
+            print(f"Warning: unable to update Firestore document with PDF URL: {db_up_ex}")
+            
+        return jsonify({
+            "success": True,
+            "bill_no": bill_no,
+            "pdf_url": cloudinary_url,
+            "message": "PDF invoice generated and uploaded successfully."
+        }), 200
+
+    except Exception as general_ex:
+        return jsonify({
+            "success": False,
+            "message": f"An unexpected error occurred during PDF generation: {str(general_ex)}"
+        }), 500
+
