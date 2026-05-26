@@ -70,31 +70,9 @@ export default function AdminDashboard({ onReprint, onToast }: AdminDashboardPro
     }
   };
 
-  const handleOpenPDF = async (b: Bill) => {
-    if (b.pdf_url && b.pdf_url !== "#" && b.pdf_url.startsWith("http")) {
-      window.open(b.pdf_url, "_blank");
-      onToast("Opening dynamic PDF invoice...", "success");
-      return;
-    }
-
-    try {
-      onToast("Loading professional invoice PDF...", "success");
-      const res = await fetch(`/api/bill/${b.bill_no}/pdf`, {
-        headers: {
-          "Accept": "application/json"
-        }
-      });
-      const data = await res.json();
-      if (data.success && data.pdf_url && data.pdf_url !== "#") {
-        window.open(data.pdf_url, "_blank");
-      } else {
-        // Fallback to HTML Print layout
-        window.open(`/api/bill/${b.bill_no}/pdf`, "_blank");
-      }
-    } catch (err) {
-      // Fallback
-      window.open(`/api/bill/${b.bill_no}/pdf`, "_blank");
-    }
+  const handleOpenPDF = (b: Bill) => {
+    onToast("Opening dynamic PDF invoice...", "success");
+    window.open(`/api/bill/${b.bill_no}/pdf`, "_blank");
   };
 
   // CSV Export utility
