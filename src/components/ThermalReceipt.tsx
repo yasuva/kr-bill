@@ -16,25 +16,9 @@ export default function ThermalReceipt({ bill, onClose, onToast }: ThermalReceip
     onToast("Sending invoice to print queue...", "success");
   };
 
-  const handleDownloadPDF = async () => {
-    try {
-      onToast("Loading professional invoice PDF...", "success");
-      const res = await fetch(`/api/bill/${bill.bill_no}/pdf`, {
-        headers: {
-          "Accept": "application/json"
-        }
-      });
-      const data = await res.json();
-      if (data.success && data.pdf_url && data.pdf_url !== "#") {
-        window.open(data.pdf_url, "_blank");
-      } else {
-        // Fallback to HTML Print layout
-        window.open(`/api/bill/${bill.bill_no}/pdf`, "_blank");
-      }
-    } catch (err) {
-      // Fallback
-      window.open(`/api/bill/${bill.bill_no}/pdf`, "_blank");
-    }
+  const handleDownloadPDF = () => {
+    onToast("Opening dynamic PDF invoice...", "success");
+    window.open(`/api/bill/${bill.bill_no}/pdf`, "_blank");
   };
 
   return (
