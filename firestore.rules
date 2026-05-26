@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Auth and general helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+    
+    // Validation helper for bill entity
+    function isValidBill(data) {
+      return data.bill_no is string && data.bill_no.size() <= 64
+          && data.date is string && data.date.size() == 10
+          && data.subtotal is number && data.subtotal >= 0
+          && data.grand_total is number && data.grand_total >= 0
+          && data.discount is number && data.discount >= 0
+          && data.gst is number && data.gst >= 0;
+    }
+    
+    // Rule for the bills collection
+    match /bills/{billId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(billId) && isValidBill(incoming());
+      allow update: if isSignedIn() && isValidId(billId) && isValidBill(incoming())
+                       && incoming().bill_no == existing().bill_no; // bill number is immutable
+      allow delete: if isSignedIn() && isValidId(billId);
+    }
+  }
+}

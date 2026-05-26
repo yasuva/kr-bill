@@ -1,0 +1,6 @@
+{
+  "name": "KR Store Billing System",
+  "description": "A high-performance real-world POS cash register and billing application with thermal printing templates, ReportLab PDF export, and sales analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

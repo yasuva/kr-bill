@@ -1,0 +1,22 @@
+{
+  "short_name": "KR POS",
+  "name": "KR Store Billing System",
+  "description": "Fast and responsive tax-free domestic POS billing application optimized for domestic retail counters.",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/shopping-cart.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/shopping-cart.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}
