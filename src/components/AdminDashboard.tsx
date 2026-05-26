@@ -70,6 +70,33 @@ export default function AdminDashboard({ onReprint, onToast }: AdminDashboardPro
     }
   };
 
+  const handleOpenPDF = async (b: Bill) => {
+    if (b.pdf_url && b.pdf_url !== "#" && b.pdf_url.startsWith("http")) {
+      window.open(b.pdf_url, "_blank");
+      onToast("Opening dynamic PDF invoice...", "success");
+      return;
+    }
+
+    try {
+      onToast("Loading professional invoice PDF...", "success");
+      const res = await fetch(`/api/bill/${b.bill_no}/pdf`, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (data.success && data.pdf_url && data.pdf_url !== "#") {
+        window.open(data.pdf_url, "_blank");
+      } else {
+        // Fallback to HTML Print layout
+        window.open(`/api/bill/${b.bill_no}/pdf`, "_blank");
+      }
+    } catch (err) {
+      // Fallback
+      window.open(`/api/bill/${b.bill_no}/pdf`, "_blank");
+    }
+  };
+
   // CSV Export utility
   const handleExportCSV = () => {
     if (bills.length === 0) {
@@ -311,15 +338,13 @@ export default function AdminDashboard({ onReprint, onToast }: AdminDashboardPro
                         </button>
 
                         {/* Open ReportLab PDF URL out */}
-                        <a
-                          href={b.pdf_url && b.pdf_url !== "#" ? b.pdf_url : `/api/bill/${b.bill_no}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                        <button
+                          onClick={() => handleOpenPDF(b)}
+                          className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer"
                           title="Invoice PDF"
                         >
                           <FileText size={13} />
-                        </a>
+                        </button>
 
                         {/* Delete profile */}
                         <button
