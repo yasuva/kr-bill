@@ -1,5 +1,7 @@
 import { Bill, AuthenticatedUser, BillItem } from "../types";
 
+export const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL || "") as string).replace(/\/$/, "");
+
 // Token storage keys
 const AUTH_TOKEN_KEY = "kr_store_token";
 const AUTH_USER_KEY = "kr_store_user";
@@ -19,7 +21,7 @@ export const apiService = {
   // Authentication services
   async login(username: string, password: string): Promise<{ success: boolean; user?: AuthenticatedUser; message?: string }> {
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch(`${API_BASE_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
@@ -91,7 +93,7 @@ export const apiService = {
     payment_method: string;
   }): Promise<{ success: boolean; bill?: Bill; message?: string }> {
     try {
-      const res = await fetch("/api/create_bill", {
+      const res = await fetch(`${API_BASE_URL}/api/create_bill`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify(billData)
@@ -145,7 +147,7 @@ export const apiService = {
       if (filters?.q) params.append("q", filters.q);
       if (filters?.date) params.append("date", filters.date);
 
-      const res = await fetch(`/api/get_bills?${params.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/api/get_bills?${params.toString()}`, {
         method: "GET",
         headers: getHeaders()
       });
@@ -179,7 +181,7 @@ export const apiService = {
   // Delete bill
   async deleteBill(billNo: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/delete_bill/${billNo}`, {
+      const res = await fetch(`${API_BASE_URL}/api/delete_bill/${billNo}`, {
         method: "DELETE",
         headers: getHeaders()
       });
@@ -199,7 +201,7 @@ export const apiService = {
   // Sales aggregates
   async getTodaySales(): Promise<{ total_sales: number; count: number; bills: Bill[] }> {
     try {
-      const res = await fetch("/api/today_sales", { headers: getHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/today_sales`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) {
         return {
@@ -225,7 +227,7 @@ export const apiService = {
 
   async getMonthlySales(): Promise<{ total_sales: number; count: number }> {
     try {
-      const res = await fetch("/api/monthly_sales", { headers: getHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/monthly_sales`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) {
         return { total_sales: data.total_sales, count: data.transactions_count };
