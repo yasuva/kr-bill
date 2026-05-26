@@ -49,8 +49,7 @@ For scalable cloud deployments (e.g., Frontend on Vercel, Python Backend on Rend
 │   │   ├── bill_routes.py      # Transaction CRUD pipelines
 │   │   └── dashboard_routes.py # Financial aggregates (Daily, Monthly)
 │   ├── services/
-│   │   ├── firebase_service.py # Cloud Firestore SDK connection setups
-│   │   └── cloudinary_service.py # Cloudinary receipts PDF file manager
+│   │   └── firebase_service.py # Cloud Firestore SDK connection setups
 │   ├── requirements.txt        # Production Python installations lists
 │   └── app.py                  # Standard Flask entry driver
 │
@@ -96,7 +95,6 @@ service cloud.firestore {
 2. Select **Python** runtime and configure Environment Variables:
    * `SECRET_KEY`: Custom secure password.
    * `JWT_SECRET`: Custom JWT signing key.
-   * `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` for secure Cloud PDF storage.
    * `FIREBASE_CONFIG_JSON` for service account credentials certificates.
 3. Render installs requirements via `requirements.txt` and starts the app with:
    `gunicorn backend.app:app_instance`
