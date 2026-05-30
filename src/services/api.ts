@@ -1,6 +1,7 @@
-import { Bill, AuthenticatedUser, BillItem } from "../types";
+// Centralized API configuration and operations for the KR Store Billing POS.
+// This file serves as the main JS-native API channel with unified fallback protections.
 
-export const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL || "") as string).replace(/\/$/, "");
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 // Token storage keys
 const AUTH_TOKEN_KEY = "kr_store_token";
@@ -8,8 +9,8 @@ const AUTH_USER_KEY = "kr_store_user";
 const LOCAL_BILLS_KEY = "kr_store_local_bills";
 const DRAFT_BILL_KEY = "kr_store_draft_bill";
 
-// Header helper
-function getHeaders(): HeadersInit {
+// Helper for generating headers
+function getHeaders() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   return {
     "Content-Type": "application/json",
@@ -19,7 +20,7 @@ function getHeaders(): HeadersInit {
 
 export const apiService = {
   // Authentication services
-  async login(username: string, password: string): Promise<{ success: boolean; user?: AuthenticatedUser; message?: string }> {
+  async login(username, password) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/login`, {
         method: "POST",
@@ -34,7 +35,7 @@ export const apiService = {
       }
       return { success: false, message: data.message || "Invalid credentials" };
     } catch (err) {
-      // Local authentication fallback for direct frontend-only stand-alone run
+      console.warn("API login failed, attempting local fallback connection:", err);
       if (username === "admin" && password === "password123") {
         const localUser = { username: "admin", name: "Offline Admin Operator", role: "admin" };
         localStorage.setItem(AUTH_TOKEN_KEY, "offline-jwt-token-2026");
@@ -50,7 +51,7 @@ export const apiService = {
     localStorage.removeItem(AUTH_USER_KEY);
   },
 
-  getCurrentUser(): AuthenticatedUser | null {
+  getCurrentUser() {
     const raw = localStorage.getItem(AUTH_USER_KEY);
     if (!raw) return null;
     try {
@@ -60,17 +61,17 @@ export const apiService = {
     }
   },
 
-  isAuthenticated(): boolean {
+  isAuthenticated() {
     return !!localStorage.getItem(AUTH_TOKEN_KEY);
   },
 
   // Auto-Save Draft Bill Systems
-  saveDraftBill(customerName: string, items: BillItem[]) {
+  saveDraftBill(customerName, items) {
     const draft = { customerName, items };
     localStorage.setItem(DRAFT_BILL_KEY, JSON.stringify(draft));
   },
 
-  getDraftBill(): { customerName: string; items: BillItem[] } | null {
+  getDraftBill() {
     const raw = localStorage.getItem(DRAFT_BILL_KEY);
     if (!raw) return null;
     try {
@@ -85,13 +86,7 @@ export const apiService = {
   },
 
   // Main CRUD Billing Operations
-  async createBill(billData: {
-    customer_name: string;
-    items: BillItem[];
-    subtotal: number;
-    grand_total: number;
-    payment_method: string;
-  }): Promise<{ success: boolean; bill?: Bill; message?: string }> {
+  async createBill(billData) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/create_bill`, {
         method: "POST",
@@ -100,22 +95,19 @@ export const apiService = {
       });
       const data = await res.json();
       if (data.success) {
-        // Clear active draft since it's saved successfully!
         this.clearDraftBill();
-        
-        // Also save to offline cache to ensure multi-layer redundancy
         this.syncBillToLocalCache(data.bill);
         return { success: true, bill: data.bill };
       }
       return { success: false, message: data.message };
     } catch (err) {
-      // Offline robust POS fail-safe! Commit to localStorage cache immediately
+      console.warn("Server failed to save bill, registering to local offline cache:", err);
       const nextId = this.incrementLocalBillCounter();
       const year = new Date().getFullYear();
       const billNo = `KR-${year}-${nextId}`;
       const now = new Date();
       
-      const offlineBill: Bill = {
+      const offlineBill = {
         id: billNo,
         bill_no: billNo,
         customer_name: billData.customer_name || "Walk-in Customer",
@@ -124,7 +116,7 @@ export const apiService = {
         subtotal: billData.subtotal,
         grand_total: billData.grand_total,
         payment_method: billData.payment_method,
-        pdf_url: "#", // Local thermal print ONLY
+        pdf_url: "#",
         created_at: now.toISOString(),
         items: billData.items
       };
@@ -141,7 +133,7 @@ export const apiService = {
   },
 
   // Get Billing History list
-  async getBills(filters?: { q?: string; date?: string }): Promise<Bill[]> {
+  async getBills(filters) {
     try {
       const params = new URLSearchParams();
       if (filters?.q) params.append("q", filters.q);
@@ -153,14 +145,13 @@ export const apiService = {
       });
       const data = await res.json();
       if (data.success) {
-        // Sync local cache with items returned from the server!
         if (data.bills && data.bills.length > 0) {
           localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(data.bills));
         }
         return data.bills;
       }
-    } catch {
-      // In case of offline run, directly serve from Cache!
+    } catch (err) {
+      console.warn("Failed fetching from servers, reading from local cache:", err);
     }
     
     // Serve from robust offline cache
@@ -179,7 +170,7 @@ export const apiService = {
   },
 
   // Delete bill
-  async deleteBill(billNo: string): Promise<boolean> {
+  async deleteBill(billNo) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/delete_bill/${billNo}`, {
         method: "DELETE",
@@ -190,8 +181,8 @@ export const apiService = {
         this.deleteFromLocalCache(billNo);
         return true;
       }
-    } catch {
-      // Offline delete safety
+    } catch (err) {
+      console.warn("Delete call failed, dropping only from local cache:", err);
     }
     
     this.deleteFromLocalCache(billNo);
@@ -199,7 +190,7 @@ export const apiService = {
   },
 
   // Sales aggregates
-  async getTodaySales(): Promise<{ total_sales: number; count: number; bills: Bill[] }> {
+  async getTodaySales() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/today_sales`, { headers: getHeaders() });
       const data = await res.json();
@@ -210,8 +201,8 @@ export const apiService = {
           bills: data.bills || []
         };
       }
-    } catch {
-      // calculation fallback
+    } catch (err) {
+      console.warn("Today's sales API unavailable. Calculating locally:", err);
     }
 
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -225,18 +216,18 @@ export const apiService = {
     };
   },
 
-  async getMonthlySales(): Promise<{ total_sales: number; count: number }> {
+  async getMonthlySales() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/monthly_sales`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) {
         return { total_sales: data.total_sales, count: data.transactions_count };
       }
-    } catch {
-      // calculation fallback
+    } catch (err) {
+      console.warn("Monthly sales API unavailable. Calculating locally:", err);
     }
 
-    const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
     const monthlyBills = this.getLocalBillsCache().filter(b => b.date.startsWith(currentMonthStr));
     const sum = monthlyBills.reduce((acc, b) => acc + b.grand_total, 0);
 
@@ -246,9 +237,8 @@ export const apiService = {
     };
   },
 
-  // ---------------------------------------------------------------------------
-  // Internal Helper Cache Handlers
-  getLocalBillsCache(): Bill[] {
+  // Local Storage helpers
+  getLocalBillsCache() {
     const raw = localStorage.getItem(LOCAL_BILLS_KEY);
     if (!raw) return [];
     try {
@@ -258,7 +248,7 @@ export const apiService = {
     }
   },
 
-  syncBillToLocalCache(bill: Bill) {
+  syncBillToLocalCache(bill) {
     const list = this.getLocalBillsCache();
     const index = list.findIndex(b => b.bill_no === bill.bill_no);
     if (index > -1) {
@@ -269,13 +259,13 @@ export const apiService = {
     localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(list));
   },
 
-  deleteFromLocalCache(billNo: string) {
+  deleteFromLocalCache(billNo) {
     let list = this.getLocalBillsCache();
     list = list.filter(b => b.bill_no !== billNo);
     localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(list));
   },
 
-  incrementLocalBillCounter(): number {
+  incrementLocalBillCounter() {
     const key = "kr_store_bill_counter";
     const current = parseInt(localStorage.getItem(key) || "1000", 10);
     const next = current + 1;
