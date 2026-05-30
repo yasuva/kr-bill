@@ -155,7 +155,7 @@ def delete_bill(id):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
-@bill_bp.route("/api/bill/<bill_no>/pdf", methods=["GET"])
+@bill_bp.route("/bill/<bill_no>/pdf", methods=["GET"])
 def get_bill_pdf_url(bill_no):
     """
     GET /api/bill/<bill_no>/pdf: Checks Firebase for the bill data,
