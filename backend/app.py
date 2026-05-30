@@ -14,10 +14,10 @@ def create_app():
     CORS(app, resources={r"/*": {"origins": "*"}})
     
     # Register Modular Blueprints directly to match the exact URL schemas requested 
-    # (e.g., POST /login, POST /create_bill, GET /get_bills)
-    app.register_blueprint(auth_bp, url_prefix="")
-    app.register_blueprint(bill_bp, url_prefix="")
-    app.register_blueprint(dash_bp, url_prefix="")
+    # (e.g., POST /login, POST /create_bill, GET /get_bills) under /api namespace
+    app.register_blueprint(auth_bp, url_prefix="/api")
+    app.register_blueprint(bill_bp, url_prefix="/api")
+    app.register_blueprint(dash_bp, url_prefix="/api")
     
     # Root status probe helper
     @app.route("/", methods=["GET"])
